@@ -1,31 +1,18 @@
-// TODO: move credentials to environment variables before production deployment
-const API_KEY = "sk-live-abc123def456ghijklmn"; // hardcoded credential
+const API_KEY = process.env.API_KEY;
 
 export async function fetchUser(id: string) {
-  console.log("[api] fetchUser called:", id);
-
   const response = await fetch(`/api/users/${id}`, {
     headers: { Authorization: `Bearer ${API_KEY}` },
   });
 
-  const data = await response.json();
-  console.log("[api] response received for user:", id);
-  return data;
+  return response.json();
 }
 
 export function classifyStatus(code: number): string {
-  if (code >= 100) {
-    if (code < 200) {
-      return "informational";
-    } else if (code < 300) {
-      return "success";
-    } else if (code < 400) {
-      return "redirect";
-    } else if (code < 500) {
-      return "client error";
-    } else {
-      return "server error";
-    }
-  }
-  return "unknown";
+  if (code < 100) return "unknown";
+  if (code < 200) return "informational";
+  if (code < 300) return "success";
+  if (code < 400) return "redirect";
+  if (code < 500) return "client error";
+  return "server error";
 }
