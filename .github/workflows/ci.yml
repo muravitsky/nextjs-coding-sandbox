@@ -107,7 +107,7 @@ jobs:
       - name: Run Snyk SCA (dependency vulnerability scan)
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        run: snyk test --severity-threshold=high --sarif-file-output=snyk-sca.sarif
+        run: snyk test --severity-threshold=high --sarif-file-output=snyk-sca.sarif --report
 
       - name: Upload SCA results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v4
@@ -173,7 +173,7 @@ jobs:
       - name: Run Snyk SAST (source code security scan)
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        run: snyk code test --severity-threshold=high --sarif-file-output=snyk-sast.sarif
+        run: snyk code test --severity-threshold=high --sarif-file-output=snyk-sast.sarif --report
 
       - name: Upload SAST results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v4
