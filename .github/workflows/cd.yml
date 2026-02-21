@@ -1,18 +1,27 @@
 name: CD
 
-# Triggers only after CI completes successfully on the main branch.
+# Triggered only when CI completes on main. The job-level `if` below
+# ensures deployment runs only when CI passed — not on failure or cancellation.
 on:
   workflow_run:
     workflows: [CI]
     branches: [main]
     types: [completed]
 
+# Prevent concurrent deployments. If a deploy is already in progress,
+# the next one will queue rather than run in parallel.
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
 jobs:
   deploy:
     name: Deploy to Vercel (Production)
     runs-on: ubuntu-latest
-    # Only run when CI passed
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    # Gate: only deploy when CI passed on a push event (not manual re-runs).
+    if: |
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push'
     environment:
       name: production
       url: ${{ steps.deploy.outputs.url }}
@@ -21,7 +30,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # Checkout the exact commit that triggered the CI run
           ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Setup Bun
