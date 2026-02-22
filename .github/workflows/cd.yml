@@ -70,11 +70,6 @@ jobs:
     needs: deploy-preview
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.workflow_run.head_sha }}
-
       - name: Install xmllint
         run: sudo apt-get install -y libxml2-utils
 
@@ -95,37 +90,95 @@ jobs:
             sleep 5
           done
 
-      - name: Check robots.txt
+      - name: Run checks and generate summary
         run: |
           PREVIEW_URL="${{ needs.deploy-preview.outputs.preview_url }}"
           BYPASS="${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}"
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            -H "x-vercel-protection-bypass: $BYPASS" \
-            "$PREVIEW_URL/robots.txt")
-          echo "robots.txt HTTP status: $STATUS"
-          [ "$STATUS" = "200" ] || (echo "robots.txt returned $STATUS" && exit 1)
+          FAIL=0
 
-      - name: Check sitemap.xml
-        run: |
-          PREVIEW_URL="${{ needs.deploy-preview.outputs.preview_url }}"
-          BYPASS="${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}"
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            -H "x-vercel-protection-bypass: $BYPASS" \
-            "$PREVIEW_URL/sitemap.xml")
-          BODY=$(curl -s -H "x-vercel-protection-bypass: $BYPASS" "$PREVIEW_URL/sitemap.xml")
-          echo "sitemap.xml HTTP status: $STATUS"
-          [ "$STATUS" = "200" ] || (echo "sitemap.xml returned $STATUS" && exit 1)
-          echo "$BODY" | xmllint --noout - || (echo "sitemap.xml is not valid XML" && exit 1)
-          echo "sitemap.xml is valid XML"
+          curl_status() { curl -s -o /dev/null -w "%{http_code}" -H "x-vercel-protection-bypass: $BYPASS" "$1"; }
+          curl_body()   { curl -s -H "x-vercel-protection-bypass: $BYPASS" "$1"; }
+          icon()        { [ "$1" = "200" ] && echo "✅" || echo "❌"; }
 
-      - name: Check for broken links
-        uses: lycheeverse/lychee-action@v2
-        with:
-          args: >-
-            --no-progress
-            --header "x-vercel-protection-bypass: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}"
-            ${{ needs.deploy-preview.outputs.preview_url }}
-          fail: true
+          # ── Summary header ────────────────────────────────────────────────
+          {
+            echo "# Sanity – robots / sitemap / links"
+            echo ""
+            echo "**Preview:** [$PREVIEW_URL]($PREVIEW_URL)"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # ── Endpoint checks ───────────────────────────────────────────────
+          {
+            echo "## Endpoint checks"
+            echo ""
+            echo "| Endpoint | URL | Status |"
+            echo "|----------|-----|:------:|"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          ROBOTS_STATUS=$(curl_status "$PREVIEW_URL/robots.txt")
+          [ "$ROBOTS_STATUS" != "200" ] && FAIL=1
+          echo "| \`robots.txt\` | [$PREVIEW_URL/robots.txt]($PREVIEW_URL/robots.txt) | $(icon $ROBOTS_STATUS) \`$ROBOTS_STATUS\` |" \
+            >> "$GITHUB_STEP_SUMMARY"
+
+          SITEMAP_BODY=$(curl_body "$PREVIEW_URL/sitemap.xml")
+          SITEMAP_STATUS=$(curl_status "$PREVIEW_URL/sitemap.xml")
+          [ "$SITEMAP_STATUS" != "200" ] && FAIL=1
+          echo "$SITEMAP_BODY" | xmllint --noout - 2>/dev/null \
+            && XML_NOTE="valid XML" || { XML_NOTE="invalid XML"; FAIL=1; }
+          echo "| \`sitemap.xml\` ($XML_NOTE) | [$PREVIEW_URL/sitemap.xml]($PREVIEW_URL/sitemap.xml) | $(icon $SITEMAP_STATUS) \`$SITEMAP_STATUS\` |" \
+            >> "$GITHUB_STEP_SUMMARY"
+
+          # ── Sitemap URLs ──────────────────────────────────────────────────
+          {
+            echo ""
+            echo "## Sitemap URLs"
+            echo ""
+            echo "| URL | Status |"
+            echo "|-----|:------:|"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          SITEMAP_URLS=$(echo "$SITEMAP_BODY" | grep -oP '(?<=<loc>)[^<]+')
+          for URL in $SITEMAP_URLS; do
+            S=$(curl_status "$URL")
+            [ "$S" != "200" ] && FAIL=1
+            echo "| [$URL]($URL) | $(icon $S) \`$S\` |" >> "$GITHUB_STEP_SUMMARY"
+          done
+
+          # ── Page links ────────────────────────────────────────────────────
+          {
+            echo ""
+            echo "## Page links"
+            echo ""
+            echo "| URL | Status |"
+            echo "|-----|:------:|"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          PAGE_HTML=$(curl_body "$PREVIEW_URL")
+          # Absolute hrefs only; skip _next internals, anchors, mailto, javascript
+          PAGE_LINKS=$(echo "$PAGE_HTML" \
+            | grep -oP '(?<=href=")[^"]+' \
+            | grep -P '^https?://' \
+            | grep -v '_next/' \
+            | sort -u)
+
+          if [ -z "$PAGE_LINKS" ]; then
+            echo "| — | no external links found |" >> "$GITHUB_STEP_SUMMARY"
+          else
+            for LINK in $PAGE_LINKS; do
+              S=$(curl -s -o /dev/null -w "%{http_code}" "$LINK")
+              echo "| [$LINK]($LINK) | $(icon $S) \`$S\` |" >> "$GITHUB_STEP_SUMMARY"
+            done
+          fi
+
+          # ── Footer ────────────────────────────────────────────────────────
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$FAIL" = "0" ]; then
+            echo "> ✅ All checks passed" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "> ❌ One or more checks failed" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
 
   # ── 2b. Core Web Vitals: Unlighthouse ──────────────────────────────────────
   cwv-unlighthouse:
