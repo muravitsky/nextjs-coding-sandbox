@@ -1,6 +1,8 @@
-import { render, screen } from "@testing-library/react";
-import { describe, it, expect } from "bun:test";
+import { render, screen, cleanup } from "@testing-library/react";
+import { describe, it, expect, afterEach } from "bun:test";
 import Home from "./page";
+
+afterEach(cleanup);
 
 describe("Home", () => {
   it("renders the heading", () => {
