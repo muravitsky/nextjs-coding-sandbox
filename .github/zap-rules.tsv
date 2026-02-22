@@ -1,1 +1,9 @@
-90022	IGNORE	(Application Error Disclosure) Next.js compiled JS false positive
+10015	IGNORE	Re-examine Cache-control Directives (controlled by Vercel CDN)
+10027	IGNORE	Information Disclosure - Suspicious Comments (Next.js minified JS chunks)
+10049	IGNORE	Storable and Cacheable Content (intentional for static assets)
+10050	IGNORE	Retrieved from Cache (intentional – Vercel CDN)
+10055	IGNORE	CSP: Failure to Define Directive with No Fallback (CSP improvements tracked separately)
+10098	IGNORE	Cross-Domain Misconfiguration (Vercel CDN sets CORS on static assets by design)
+10109	IGNORE	Modern Web Application (informational only)
+90004	IGNORE	Cross-Origin-Embedder-Policy Header Missing (Next.js Google Fonts requires cross-origin)
+90022	IGNORE	Application Error Disclosure (Next.js compiled JS false positive)
