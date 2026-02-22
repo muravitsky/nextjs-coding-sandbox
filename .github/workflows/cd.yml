@@ -94,9 +94,12 @@ jobs:
       - name: Wait for preview to be ready
         run: |
           PREVIEW_URL="${{ needs.deploy-preview.outputs.preview_url }}"
+          BYPASS="${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}"
           echo "Waiting for $PREVIEW_URL..."
           for i in $(seq 1 12); do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$PREVIEW_URL")
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+              -H "x-vercel-protection-bypass: $BYPASS" \
+              "$PREVIEW_URL")
             if [ "$STATUS" = "200" ]; then
               echo "Preview is ready (HTTP $STATUS)"
               break
@@ -108,15 +111,21 @@ jobs:
       - name: Check robots.txt
         run: |
           PREVIEW_URL="${{ needs.deploy-preview.outputs.preview_url }}"
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$PREVIEW_URL/robots.txt")
+          BYPASS="${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "x-vercel-protection-bypass: $BYPASS" \
+            "$PREVIEW_URL/robots.txt")
           echo "robots.txt HTTP status: $STATUS"
           [ "$STATUS" = "200" ] || (echo "robots.txt returned $STATUS" && exit 1)
 
       - name: Check sitemap.xml
         run: |
           PREVIEW_URL="${{ needs.deploy-preview.outputs.preview_url }}"
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$PREVIEW_URL/sitemap.xml")
-          BODY=$(curl -s "$PREVIEW_URL/sitemap.xml")
+          BYPASS="${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "x-vercel-protection-bypass: $BYPASS" \
+            "$PREVIEW_URL/sitemap.xml")
+          BODY=$(curl -s -H "x-vercel-protection-bypass: $BYPASS" "$PREVIEW_URL/sitemap.xml")
           echo "sitemap.xml HTTP status: $STATUS"
           [ "$STATUS" = "200" ] || (echo "sitemap.xml returned $STATUS" && exit 1)
           echo "$BODY" | xmllint --noout - || (echo "sitemap.xml is not valid XML" && exit 1)
@@ -125,7 +134,10 @@ jobs:
       - name: Check for broken links
         uses: lycheeverse/lychee-action@v2
         with:
-          args: --no-progress ${{ needs.deploy-preview.outputs.preview_url }}
+          args: >-
+            --no-progress
+            --header "x-vercel-protection-bypass: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}"
+            ${{ needs.deploy-preview.outputs.preview_url }}
           fail: true
 
   # ── 2c. Accessibility: axe-core WCAG 2.2 AA ───────────────────────────────
