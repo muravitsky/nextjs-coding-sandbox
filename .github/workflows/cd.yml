@@ -63,7 +63,36 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
-  # ── 2a. Sanity tests: robots / sitemap / broken links ──────────────────────
+  # ── 2a. DAST: OWASP ZAP baseline scan ─────────────────────────────────────
+  dast-zap:
+    name: DAST – OWASP ZAP Baseline
+    runs-on: ubuntu-latest
+    needs: deploy-preview
+    permissions:
+      issues: write
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.workflow_run.head_sha }}
+
+      - name: Fix workspace permissions for ZAP
+        run: chmod a+w .
+
+      - name: ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.12.0
+        with:
+          target: ${{ needs.deploy-preview.outputs.preview_url }}
+          rules_file_name: .github/zap-rules.tsv
+          fail_action: true
+        env:
+          ZAP_AUTH_HEADER: x-vercel-protection-bypass
+          ZAP_AUTH_HEADER_VALUE: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          ZAP_AUTH_HEADER_SITE: vercel.app
+
+  # ── 2b. Sanity tests: robots / sitemap / broken links ──────────────────────
   sanity-tests:
     name: Sanity – robots / sitemap / links
     runs-on: ubuntu-latest
@@ -261,6 +290,7 @@ jobs:
     name: Deploy to Vercel (Production)
     runs-on: ubuntu-latest
     needs:
+      - dast-zap
       - sanity-tests
       - cwv-unlighthouse
       - security-headers
