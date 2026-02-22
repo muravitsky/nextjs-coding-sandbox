@@ -1,6 +1,6 @@
 interface Props {
-  name: string;
-  bio: string;
+  readonly name: string;
+  readonly bio: string;
 }
 
 export function UserCard({ name, bio }: Props) {
