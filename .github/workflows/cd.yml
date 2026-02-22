@@ -7,12 +7,22 @@ on:
     workflows: [CI]
     branches: [main, develop]
     types: [completed]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        default: production
+        type: choice
+        options:
+          - production
+          - staging
 
 # Separate concurrency groups per branch so a staging deploy never blocks
 # a production deploy and vice versa. Queued rather than cancelled so no
 # push is silently skipped.
 concurrency:
-  group: ${{ github.event.workflow_run.head_branch }}-deploy
+  group: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || github.event.workflow_run.head_branch }}-deploy
   cancel-in-progress: false
 
 jobs:
@@ -21,9 +31,11 @@ jobs:
     name: Deploy to Vercel (Staging)
     runs-on: ubuntu-latest
     if: |
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event == 'push' &&
-      github.event.workflow_run.head_branch == 'develop'
+      (github.event_name == 'workflow_dispatch' && inputs.environment == 'staging') ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'develop')
     environment:
       name: staging
       url: ${{ steps.deploy.outputs.url }}
@@ -32,7 +44,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.workflow_run.head_sha }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -69,9 +81,11 @@ jobs:
     name: Deploy to Vercel (Production)
     runs-on: ubuntu-latest
     if: |
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event == 'push' &&
-      github.event.workflow_run.head_branch == 'main'
+      (github.event_name == 'workflow_dispatch' && inputs.environment == 'production') ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main')
     environment:
       name: production
       url: ${{ steps.deploy.outputs.url }}
@@ -80,7 +94,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.workflow_run.head_sha }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
