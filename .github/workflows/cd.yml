@@ -5,87 +5,26 @@ name: CD
 on:
   workflow_run:
     workflows: [CI]
-    branches: [main, develop]
+    branches: [main]
     types: [completed]
   workflow_dispatch:
-    inputs:
-      environment:
-        description: "Target environment"
-        required: true
-        default: production
-        type: choice
-        options:
-          - production
-          - staging
 
 # Separate concurrency groups per branch so a staging deploy never blocks
 # a production deploy and vice versa. Queued rather than cancelled so no
 # push is silently skipped.
 concurrency:
-  group: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || github.event.workflow_run.head_branch }}-deploy
+  group: production-deploy
   cancel-in-progress: false
 
 jobs:
-  # ── Staging: develop → Vercel preview environment ───────────────────────────
-  deploy-staging:
-    name: Deploy to Vercel (Staging)
-    runs-on: ubuntu-latest
-    if: |
-      (github.event_name == 'workflow_dispatch' && inputs.environment == 'staging') ||
-      (github.event_name == 'workflow_run' &&
-       github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.event == 'push' &&
-       github.event.workflow_run.head_branch == 'develop')
-    environment:
-      name: staging
-      url: ${{ steps.deploy.outputs.url }}
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.workflow_run.head_sha }}
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Install Vercel CLI
-        run: npm install -g vercel@latest
-
-      - name: Pull Vercel environment info
-        run: vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-
-      - name: Build project artifacts via Vercel
-        run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-
-      - name: Deploy prebuilt artifacts to Vercel (Staging)
-        id: deploy
-        run: |
-          DEPLOYMENT_URL=$(vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }})
-          echo "url=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
-          echo "Deployed to staging: $DEPLOYMENT_URL"
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-
   # ── Production: main → Vercel production environment ────────────────────────
   deploy-production:
     name: Deploy to Vercel (Production)
     runs-on: ubuntu-latest
     if: |
-      (github.event_name == 'workflow_dispatch' && inputs.environment == 'production') ||
-      (github.event_name == 'workflow_run' &&
-       github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.event == 'push' &&
-       github.event.workflow_run.head_branch == 'main')
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push')
     environment:
       name: production
       url: ${{ steps.deploy.outputs.url }}
