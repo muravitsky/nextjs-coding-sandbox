@@ -1,8 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
-  testDir: "./e2e",
-  snapshotDir: "./e2e/snapshots",
+  testDir: "../e2e",
+  snapshotDir: "../e2e/snapshots",
   use: {
     baseURL: process.env.BASE_URL || "http://localhost:3000",
   },
