@@ -281,7 +281,7 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Run E2E smoke tests
-        run: npx playwright test --grep "home page loads"
+        run: npx playwright test --config config/playwright.config.ts --grep "home page loads"
         env:
           BASE_URL: ${{ needs.deploy-preview.outputs.preview_url }}
 

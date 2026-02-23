@@ -118,13 +118,17 @@ bun run build
 │   └── workflows/
 │       ├── ci.yml      # Lint → Test / SCA / Build / SAST → SonarCloud
 │       └── cd.yml      # Deploy to Vercel (triggered by CI success on main)
+├── config/
+│   ├── bun.d.ts                 # Bun + Testing Library type declarations
+│   ├── playwright.config.ts     # Playwright E2E test configuration
+│   ├── sonar-project.properties # SonarCloud project configuration
+│   └── test.setup.ts            # Bun test environment setup (jsdom + matchers)
 ├── src/
 │   └── app/            # Next.js App Router pages and components
-├── vercel.json         # Vercel project configuration
-├── sonar-project.properties
 ├── next.config.ts
 ├── tsconfig.json
 ├── eslint.config.mjs
+├── vercel.json
 └── package.json
 ```
 
